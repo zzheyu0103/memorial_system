@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>紀念牌查詢系統</title>
+  <style>
+    body { font-family: sans-serif; margin: 30px; }
+    label, input, button { margin: 5px 0; display: block; }
+    table { margin-top: 20px; border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  </style>
+</head>
+
+
+<body>
+  <h1>紀念牌查詢</h1>
+  <label for="name">輸入姓名：</label>
+  <input type="text" id="name" placeholder="例如：王小明">
+  <button onclick="searchMemorial()">查詢</button>
+
+  <table id="results" style="display:none;">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>姓名</th>
+        <th>地點</th>
+        <th>描述</th>
+        <th>緯度</th>
+        <th>經度</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function searchMemorial() {
+      const name = document.getElementById("name").value;
+      if (!name) {
+        alert("請輸入姓名");
+        return;
+      }
+
+      const response = await fetch(`/search?name=${encodeURIComponent(name)}`);
+      const data = await response.json();
+
+      const table = document.getElementById("results");
+      const tbody = table.querySelector("tbody");
+      tbody.innerHTML = "";
+
+      if (data.length === 0) {
+        alert("查無資料");
+        table.style.display = "none";
+        return;
+      }
+
+      data.forEach(item => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${item.id}</td>
+          <td>${item.name}</td>
+          <td>${item.location}</td>
+          <td>${item.description || ""}</td>
+          <td>${item.latitude || ""}</td>
+          <td>${item.longitude || ""}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      table.style.display = "table";
+    }
+  </script>
+
+
+
+<hr>
+<h2>匯入紀念牌資料（Excel）</h2>
+<form id="importForm">
+  <input type="file" id="excelFile" accept=".xlsx, .xls" required>
+  <button type="submit">上傳並匯入</button>
+</form>
+
+<script>
+  document.getElementById("importForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("excelFile");
+    if (!fileInput.files.length) {
+      alert("請選擇 Excel 檔案！");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+      const res = await fetch("/admin/import", {
+        method: "POST",
+        body: formData
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        alert(result.message || "匯入成功！");
+        fileInput.value = ""; // 清空檔案欄位
+      } else {
+        alert("匯入失敗：" + (result.error || "未知錯誤"));
+      }
+    } catch (err) {
+      alert("發生錯誤：" + err.message);
+    }
+  });
+</script>
+
+</body>
+</html>
+
