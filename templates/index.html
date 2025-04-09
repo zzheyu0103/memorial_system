@@ -1,116 +1,125 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>紀念牌查詢系統</title>
-  <style>
-    body { font-family: sans-serif; margin: 30px; }
-    label, input, button { margin: 5px 0; display: block; }
-    table { margin-top: 20px; border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  </style>
+    <meta charset="UTF-8">
+    <title>紀念牌查詢系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-
-
 <body>
-  <h1>紀念牌查詢</h1>
-  <label for="name">輸入姓名：</label>
-  <input type="text" id="name" placeholder="例如：王小明">
-  <button onclick="searchMemorial()">查詢</button>
+<div class="container mt-5">
+    <h1 class="text-center mb-4">紀念牌查詢系統</h1>
 
-  <table id="results" style="display:none;">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>姓名</th>
-        <th>地點</th>
-        <th>描述</th>
-        <th>緯度</th>
-        <th>經度</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+    <div class="mb-3 text-end">
+        {% if not current_user.is_authenticated %}
+            <a href="/login" class="btn btn-outline-primary btn-sm">登入後台</a>
+        {% else %}
+            <span class="me-2">歡迎 {{ current_user.username }}</span>
+            <a href="/logout" class="btn btn-outline-secondary btn-sm">登出</a>
+        {% endif %}
+    </div>
 
-  <script>
-    async function searchMemorial() {
-      const name = document.getElementById("name").value;
-      if (!name) {
-        alert("請輸入姓名");
-        return;
-      }
+    <div class="card p-4 mb-5 shadow-sm">
+        <h4>查詢紀念牌</h4>
+        <div class="input-group mb-3">
+            <input type="text" id="searchInput" class="form-control" placeholder="輸入姓名進行查詢">
+            <button class="btn btn-primary" onclick="search()">查詢</button>
+        </div>
+        <p id="resultText" class="text-success fw-bold"></p>
+    </div>
 
-      const response = await fetch(`/search?name=${encodeURIComponent(name)}`);
-      const data = await response.json();
-
-      const table = document.getElementById("results");
-      const tbody = table.querySelector("tbody");
-      tbody.innerHTML = "";
-
-      if (data.length === 0) {
-        alert("查無資料");
-        table.style.display = "none";
-        return;
-      }
-
-      data.forEach(item => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${item.id}</td>
-          <td>${item.name}</td>
-          <td>${item.location}</td>
-          <td>${item.description || ""}</td>
-          <td>${item.latitude || ""}</td>
-          <td>${item.longitude || ""}</td>
-        `;
-        tbody.appendChild(row);
-      });
-
-      table.style.display = "table";
-    }
-  </script>
-
-
-
-<hr>
-<h2>匯入紀念牌資料（Excel）</h2>
-<form id="importForm">
-  <input type="file" id="excelFile" accept=".xlsx, .xls" required>
-  <button type="submit">上傳並匯入</button>
-</form>
+    <!-- 管理員專區 -->
+    <div id="adminPanel" class="card p-4 shadow-sm d-none">
+        <h4>管理員專區</h4>
+        <div class="mb-3">
+            <input type="file" id="fileInput" class="form-control">
+        </div>
+        <div class="mb-3">
+            <button class="btn btn-success me-2" onclick="importExcel()">匯入 Excel</button>
+            <button class="btn btn-info" onclick="exportExcel()">匯出 Excel</button>
+        </div>
+        <div id="memorialList" class="mt-4"></div>
+    </div>
+</div>
 
 <script>
-  document.getElementById("importForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
+    const isAdmin = {{ 'true' if current_user.is_authenticated and current_user.role == 'admin' else 'false' }};
 
-    const fileInput = document.getElementById("excelFile");
-    if (!fileInput.files.length) {
-      alert("請選擇 Excel 檔案！");
-      return;
+    window.onload = () => {
+        if (isAdmin) {
+            document.getElementById('adminPanel').classList.remove('d-none');
+            loadMemorials();
+        }
+    };
+
+    function search() {
+        const name = document.getElementById('searchInput').value.trim();
+        if (!name) {
+            alert("請輸入姓名");
+            return;
+        }
+
+        fetch(`/search?name=${encodeURIComponent(name)}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('resultText').innerText = data.message || data.error;
+            });
     }
 
-    const formData = new FormData();
-    formData.append("file", fileInput.files[0]);
+    function importExcel() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) {
+            alert("請先選擇 Excel 檔案");
+            return;
+        }
 
-    try {
-      const res = await fetch("/admin/import", {
-        method: "POST",
-        body: formData
-      });
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const result = await res.json();
-      if (res.ok) {
-        alert(result.message || "匯入成功！");
-        fileInput.value = ""; // 清空檔案欄位
-      } else {
-        alert("匯入失敗：" + (result.error || "未知錯誤"));
-      }
-    } catch (err) {
-      alert("發生錯誤：" + err.message);
+        fetch('/admin/import', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message || data.error);
+            loadMemorials();
+        });
     }
-  });
+
+    function exportExcel() {
+        window.location.href = '/admin/export';
+    }
+
+    function loadMemorials() {
+        fetch('/admin/memorials')
+            .then(res => res.json())
+            .then(data => {
+                const list = document.getElementById('memorialList');
+                list.innerHTML = '<h5>現有資料</h5>';
+                data.forEach(mem => {
+                    list.innerHTML += `
+                        <div class="border p-2 mb-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${mem.name}</strong>（${mem.side}側，第${mem.area}區 ${mem.row}行${mem.column}列）
+                            </div>
+                            <button class="btn btn-sm btn-danger" onclick="deleteMemorial(${mem.id})">刪除</button>
+                        </div>
+                    `;
+                });
+            });
+    }
+
+    function deleteMemorial(id) {
+        if (confirm('確定要刪除這筆資料嗎？')) {
+            fetch(`/admin/delete/${id}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    loadMemorials();
+                });
+        }
+    }
 </script>
-
 </body>
 </html>
-
