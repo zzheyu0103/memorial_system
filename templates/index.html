@@ -39,62 +39,86 @@
         </div>
         <div id="memorialList" class="mt-4"></div>
     </div>
+
+    <!-- 通知框容器 -->
+    <div id="notification" class="alert" role="alert" style="display: none;"></div>
 </div>
 
 <script>
-    const isAdmin = {{ 'true' if current_user.is_authenticated and current_user.role == 'admin' else 'false' }};
+    // 把 isAdmin 從後端傳來的布林值，安全轉換成 JS 布林
+    const isAdmin = {{ (current_user.is_authenticated and current_user.role == 'admin') | tojson }};
+    console.log("isAdmin:", isAdmin);
 
     window.onload = () => {
         if (isAdmin) {
             document.getElementById('adminPanel').classList.remove('d-none');
             loadMemorials();
         }
+
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                search();
+            }
+        });
     };
 
+    // 查詢紀念牌
     function search() {
-        const name = document.getElementById('searchInput').value.trim();
+        const name = document.getElementById('searchInput').value;
         if (!name) {
             alert("請輸入姓名");
             return;
         }
 
-        fetch(`/search?name=${encodeURIComponent(name)}`)
+        fetch(`/search?name=${encodeURIComponent(name)}`, { credentials: 'include' })
             .then(res => res.json())
             .then(data => {
-                document.getElementById('resultText').innerText = data.message || data.error;
+                if (Array.isArray(data) && data.length > 0) {
+                    document.getElementById('resultText').innerText = data.map(item => item.result).join('\n');
+                } else {
+                    document.getElementById('resultText').innerText = '查無資料';
+                }
             });
     }
 
+    // 匯入 Excel
     function importExcel() {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (!file) {
-            alert("請先選擇 Excel 檔案");
+            showNotification('請先選擇 Excel 檔案', 'danger');
             return;
         }
 
         const formData = new FormData();
         formData.append('file', file);
 
-        fetch('/admin/import', {
+        fetch('/import', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include'
         })
         .then(res => res.json())
         .then(data => {
-            alert(data.message || data.error);
+            showNotification(data.message || data.error, data.status === 'success' ? 'success' : 'danger');
             loadMemorials();
+        })
+        .catch(() => {
+            showNotification('匯入過程中發生錯誤', 'danger');
         });
     }
 
+    // 匯出 Excel
     function exportExcel() {
-        window.location.href = '/admin/export';
+        window.location.href = '/export';
     }
 
+    // 載入紀念牌清單
     function loadMemorials() {
-        fetch('/admin/memorials')
+        fetch('/admin/memorials', { credentials: 'include' })
             .then(res => res.json())
             .then(data => {
+                console.log("載入到資料：", data);
                 const list = document.getElementById('memorialList');
                 list.innerHTML = '<h5>現有資料</h5>';
                 data.forEach(mem => {
@@ -110,15 +134,33 @@
             });
     }
 
+    // 刪除紀念牌
     function deleteMemorial(id) {
         if (confirm('確定要刪除這筆資料嗎？')) {
-            fetch(`/admin/delete/${id}`, { method: 'DELETE' })
-                .then(res => res.json())
-                .then(data => {
-                    alert(data.message);
-                    loadMemorials();
-                });
+            fetch(`/delete/${id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            .then(res => res.json())
+            .then(data => {
+                showNotification('刪除成功', 'success');
+                loadMemorials();
+            })
+            .catch(() => {
+                showNotification('刪除失敗', 'danger');
+            });
         }
+    }
+
+    // 顯示通知
+    function showNotification(message, type) {
+        const notification = document.getElementById('notification');
+        notification.className = `alert alert-${type}`;
+        notification.innerText = message;
+        notification.style.display = 'block';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
     }
 </script>
 </body>
