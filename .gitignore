@@ -1,0 +1,27 @@
+# Python 快取檔
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 虛擬環境
+venv/
+env/
+ENV/
+.venv/
+.ENV/
+
+# VSCode 設定（如果有用 VSCode）
+.vscode/
+
+# 資料庫檔案（如果不想版控資料庫，可以加這個）
+instance/*.db
+*.sqlite3
+
+# 匯出用 Excel（如果有匯出暫存檔也可以排除）
+*.xlsx
+*.xls
+
+# 系統檔
+.DS_Store
+Thumbs.db
